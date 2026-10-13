@@ -166,6 +166,10 @@ async def test_volume_buttons_chain_and_respect_the_cap(fake, kodi, monkeypatch)
     assert fake.volume == -30.0     # builds on the level just set
     await follower.toggle_mute()
     assert fake.mute
+    await follower.toggle_power()
+    assert not fake.power           # to standby
+    await follower.toggle_power()
+    assert fake.power
     await follower.close()
 
 

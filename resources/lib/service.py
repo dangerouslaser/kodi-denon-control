@@ -49,10 +49,10 @@ VOLUME_SHOW = 2.5
 # A volume button press within this long of the last builds on the level we
 # set, not on what was last read (the receiver may not have caught up).
 VOLUME_CHAIN = 1.5
-# Commands other add-ons send: JSONRPC.NotifyAll with sender service.denonavr
-# and one of these as the message (service.webostv's Remote Bridge sends the
-# TV remote's volume buttons this way).
-COMMANDS = {"volume_up", "volume_down", "mute"}
+# Commands sent as NotifyAll with sender service.denonavr and one of these as the
+# message: service.webostv's Remote Bridge (the TV remote's volume buttons), and
+# Estuary YBLOD's OSD panel (NotifyAll builtin), which stays open while they act.
+COMMANDS = {"volume_up", "volume_down", "mute", "power"}
 
 
 class Follower:
@@ -152,6 +152,21 @@ class Follower:
             self._show_volume()
         self._schedule_refresh(1.0)
 
+    async def toggle_power(self) -> None:
+        """On, or to standby. The receiver takes a few seconds to switch, so it's
+        read again over the next seconds (as after playback starts)."""
+        async with self._lock:
+            try:
+                on = not (await asyncio.to_thread(self.avr.status)).power
+                await asyncio.to_thread(self.avr.power, on)
+            except AvrError as err:
+                log.warning(f"power: {err}")
+                return
+            log.info(f"power {'on' if on else 'standby'}")
+        loop = asyncio.get_running_loop()
+        self._timers += [loop.call_later(delay, self.refresh) for delay in BURST]
+        self.refresh()
+
     def _show_volume(self) -> None:
         loop = asyncio.get_running_loop()
         if self._show is not None:
@@ -236,6 +251,8 @@ class _Monitor(xbmc.Monitor):
             self._service.on_loop(lambda f: f.volume(-1))
         elif command == "mute":
             self._service.on_loop(lambda f: asyncio.ensure_future(f.toggle_mute()))
+        elif command == "power":
+            self._service.on_loop(lambda f: asyncio.ensure_future(f.toggle_power()))
 
     def onSettingsChanged(self) -> None:  # noqa: N802
         self._service.reload()
