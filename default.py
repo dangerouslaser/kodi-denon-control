@@ -5,6 +5,7 @@
     mute[,on|off|toggle]
     power[,on|off|toggle]
     status                     a dialog with what the receiver is doing (default)
+    osd                        the OSD's receiver menu: format, volume, mute
 """
 
 import sys

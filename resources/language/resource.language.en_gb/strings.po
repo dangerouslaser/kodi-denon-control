@@ -101,3 +101,23 @@ msgstr ""
 msgctxt "#32123"
 msgid "No signal"
 msgstr ""
+
+msgctxt "#32116"
+msgid "Volume up"
+msgstr ""
+
+msgctxt "#32117"
+msgid "Volume down"
+msgstr ""
+
+msgctxt "#32118"
+msgid "Mute"
+msgstr ""
+
+msgctxt "#32119"
+msgid "Off"
+msgstr ""
+
+msgctxt "#32124"
+msgid "The receiver is in standby. Turn it on?"
+msgstr ""

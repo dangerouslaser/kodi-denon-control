@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import xbmcgui
 
 from . import actions
@@ -22,6 +24,9 @@ def main(argv: list[str]) -> None:
     try:
         if name == "status":
             show_status(avr)
+            return
+        if name == "osd":
+            osd_menu(settings, avr)
             return
         result = actions.run(settings, avr, name, args)
     except (AvrError, ValueError) as err:
@@ -49,3 +54,40 @@ def show_status(avr: Avr) -> None:
         lines.append(f"{tr(32114)}: {signal}")
         lines.append(f"{tr(32115)}: {status.sound or '-'}")
     xbmcgui.Dialog().textviewer(tr(32100), "\n".join(lines))
+
+
+def osd_menu(settings, avr: Avr) -> None:
+    """The OSD's receiver button: what's coming in and how it plays, volume
+    and mute. Stays open, refreshed after each change, like the LG TV menu."""
+    model = avr.device_info().get("ModelName", "")
+    title = f"Denon {model}".strip()
+    last = 0
+    while True:
+        status = avr.status()
+        if not status.power:
+            if xbmcgui.Dialog().yesno(title, tr(32124)):
+                avr.power(True)
+                actions.notify_service()
+            return
+        silent = is_silent(status.signal)
+        volume = (f"{display_volume(status.volume):g} ({status.volume:.1f} dB)"
+                  if status.volume is not None else "-")
+        menu = [
+            (f"{tr(32114)}: {tr(32123) if silent else status.signal}", None),
+            (f"{tr(32115)}: {status.sound or '-'}", None),
+            (f"{tr(32112)}: {avr.input_name(status.input)}", None),
+            (f"{tr(32113)}: {volume}", None),
+            (tr(32116), ("volume_up", [])),
+            (tr(32117), ("volume_down", [])),
+            (f"{tr(32118)}: {tr(32120) if status.mute else tr(32119)}", ("mute", ["toggle"])),
+        ]
+        index = xbmcgui.Dialog().select(title, [label for label, _ in menu], preselect=last)
+        if index < 0:
+            return
+        last = index
+        action = menu[index][1]
+        if action is None:
+            continue  # an info line: refresh
+        log.info(actions.run(settings, avr, *action) or "")
+        actions.notify_service()
+        time.sleep(0.3)  # let the receiver take it before reading back

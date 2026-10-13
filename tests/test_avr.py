@@ -123,3 +123,24 @@ async def _until(check, timeout=2.0):
     while not check():
         assert loop.time() < end, "timed out"
         await asyncio.sleep(0.02)
+
+
+def test_osd_menu_shows_the_format_and_changes_volume(fake, kodi, monkeypatch):
+    import xbmcgui
+
+    from resources.lib import script
+
+    fake.signal, fake.sound = "Dolby Digital", "Dolby Surround"
+    shown, picks = [], iter([4, 6, -1])        # volume up, mute, close
+
+    def select(heading, items, *_a, **_k):
+        shown.append(items)
+        return next(picks)
+
+    monkeypatch.setattr(xbmcgui.Dialog, "select", lambda self, *a, **k: select(*a, **k))
+    monkeypatch.setattr(script.time, "sleep", lambda _s: None)
+    settings = Settings(host="127.0.0.1", volume_step=1.0, max_volume=-10.0)
+    script.osd_menu(settings, Avr("127.0.0.1", fake.http_port))
+    assert shown[0][:4] == ["#32114: Dolby Digital", "#32115: Dolby Surround", "#32112: Kodi - yblod",
+                            "#32113: 49 (-31.0 dB)"]
+    assert shown[1][3] == "#32113: 50 (-30.0 dB)" and fake.mute
