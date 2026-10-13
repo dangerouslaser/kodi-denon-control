@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings version="1">
+  <section id="service.denonavr">
+    <category id="receiver" label="32000" help="">
+      <group id="1">
+        <setting id="host" type="string" label="32001" help="32051">
+          <level>0</level>
+          <default/>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32001</heading>
+          </control>
+        </setting>
+        <setting id="debug" type="boolean" label="32002" help="32052">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+    </category>
+  </section>
+</settings>
