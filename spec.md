@@ -52,26 +52,45 @@ Chosen:
 
 Everything is stdlib: `asyncio` streams for HEOS and the control port, and a small `asyncio` HTTP/1.1 client for 8080, so no dependency is vendored.
 
-## Receiver facts (AVR-X2700H, probed 2026-10-12, receiver in standby)
+## Receiver facts (AVR-X2700H, read 2026-10-12)
 
-- `GET :8080/goform/Deviceinfo.xml`: ModelName `AVR-X2700H`, CommApiVers `0301`, 2 zones. That's denonavr's "AVR-X 2016" type (HTTP on 8080).
-- `GET :8080/goform/formMainZone_MainZoneXmlStatusLite.xml`: Power, InputFuncSelect, VolumeDisplay (`Absolute`), MasterVolume (`-31.0`, dB), Mute.
-- `GET :8080/goform/formMainZone_MainZoneXmlStatus.xml`: **403**. Use the Lite page and AppCommand instead.
-- `POST :8080/goform/AppCommand.xml` and `AppCommand0300.xml` returned an empty `<rx>` in standby. **To verify with the receiver on.**
-- `:80` redirects to the HTTPS web setup UI and isn't used.
-- `heos://player/get_players`: one player, "Denon AVR-X2700H", pid 1474783826, firmware 3.139.173, wired.
+Read-only probes, with the receiver in standby and then on.
 
-**Verify with the receiver on, before building on it.** These checks change settings briefly, and each one is restored afterwards.
+**Connection details:**
+- **Identity:** `GET :8080/goform/Deviceinfo.xml` gives ModelName `AVR-X2700H`, CommApiVers `0301`, 2 zones. That's denonavr's "AVR-X 2016" type (HTTP on 8080).
+- **Basic status:** `GET :8080/goform/formMainZone_MainZoneXmlStatusLite.xml` gives Power, InputFuncSelect, VolumeDisplay (`Absolute`), MasterVolume (`-31.0`, dB) and Mute. It works in standby too.
+- **Blocked:** `formMainZone_MainZoneXmlStatus.xml` returns **403**, so it's not used.
+- **Port 80:** redirects to the HTTPS web setup UI, so it's not used.
 
-1. AppCommand reads: power, volume, mute, source, surround mode, tone control, Audyssey (0300).
-2. Each preset command over `formiPhoneAppDirect.xml`, read back:
-   - `MS…` (sound mode);
-   - `PSDYNEQ`, `PSDYNVOL`, `PSMULTEQ`, `PSREFLEV`;
-   - `PSDRC`, `PSDIL` / `PSDIC` (dialogue), `CVC` (centre level), `PSSWL` (subwoofer level);
-   - `PSLFE`, `PSCINEMA EQ.`, `PSNEURAL`.
-3. Which sound modes the X2700H lists for each input signal (stereo PCM, 5.1/7.1 PCM, Dolby, DTS, Atmos).
-4. HEOS volume scale against the receiver's dB, and whether HEOS events fire when the volume changes from the receiver's own remote.
-5. Whether HTTP answers in network standby, for power-on from Kodi.
+**AppCommand requests** (`POST :8080/goform/AppCommand.xml` and `AppCommand0300.xml`):
+- They work only as `<?xml …?>`, **a newline**, then `<tx>…</tx>`, sent with `Content-Type: text/xml; charset=utf-8`. Other forms get an empty `<rx>` or "411 Length Required".
+- At most 5 commands per request.
+- In standby, they return an empty `<rx>`.
+
+**What the reads return, with the receiver on:**
+
+| Read | Returns |
+| --- | --- |
+| `GetAllZonePowerStatus` / `GetAllZoneVolume` / `GetAllZoneMuteStatus` / `GetAllZoneSource` | Per zone. Volume comes in dB and as the display value (`-31.0` = `49.0`), with limit and state. |
+| `GetSurroundModeStatus` | The sound mode in use (`Stereo`) |
+| `GetSourceRename` | Input names. **Kodi is the `GAME` input, renamed "Kodi - yblod"**, which is how the addon knows the receiver is on Kodi. |
+| `GetToneControl`, `GetECO`, `GetDimmer`, `GetAutoStandby`, `GetDeletedSource` | Those settings |
+| `GetAudyssey` (0300) | Dynamic EQ, reference level offset, Dynamic Volume and MultEQ, each with a `control` flag for whether it can be changed now |
+| `GetSoundMode` (0300) | The receiver's **remembered** mode for each sound-mode category (movie, music, game, pure) |
+| `GetAudioInfo` (0300) | **The incoming signal and what's being decoded** (`signal` `PCM ZERO`, `sound` `Stereo`, `inputmode` `HDMI`, `fs`). The receiver's own account of the format, Atmos included. |
+| `GetInputSignal` (0300) | The channels present in the input signal |
+| `GetSoundModeList`, `GetActiveSpeaker` | Empty here |
+
+**HEOS:** `heos://player/get_players` shows one player, "Denon AVR-X2700H", pid 1474783826, firmware 3.139.173, wired.
+
+**Power:** `GET /goform/formiPhoneAppPower.xml?1+PowerStandby` puts the main zone in standby, and it works over HTTP.
+
+**Calibration is off limits.** The receiver is fully calibrated, and its saved sound modes must not change. Denon remembers a sound mode per input and per kind of signal, so *selecting* a sound mode overwrites that memory, even if we restore it later. See *Presets*.
+
+**Still to verify, with your go-ahead each time:**
+1. That each allowed preset command (see *Presets*) takes effect over `formiPhoneAppDirect.xml` and reads back.
+2. The HEOS volume scale against dB, and whether HEOS events fire when the volume changes from the receiver's own remote.
+3. That power-on works over HTTP from network standby.
 
 ## Addon structure
 
@@ -134,42 +153,54 @@ After applying, it reads back and reports anything the receiver didn't take.
 
 ## Presets per media type
 
-**A preset** is a named set of receiver settings. Every field is optional, and a field that's left out isn't touched. Fields:
-- sound mode;
-- Dynamic EQ on/off, reference level offset, Dynamic Volume (off/light/medium/heavy) and MultEQ curve;
-- dynamic range compression (auto/off/low/mid/high);
-- dialogue enhancer (off/low/medium/high) and centre level offset;
-- subwoofer level offset and LFE level;
-- Cinema EQ and Neural:X;
-- volume:
+**The calibration rule:** a preset never changes anything the receiver *remembers* as part of its setup. That means:
+- the sound mode;
+- Audyssey MultEQ;
+- speaker, distance and level calibration;
+- tone.
+
+Presets only adjust settings meant to change during listening, and every change is put back when playback stops. Sound mode is not a preset field. The receiver keeps choosing its own mode per input and signal, as calibrated.
+
+**A preset** is a named set of these settings, each optional. A field that's left out isn't touched.
+- **Dynamic Volume:** off, light, medium or heavy.
+- **Dynamic EQ:** on/off, and the reference level offset.
+- **Dynamic range compression:** auto, off, low, mid or high. It only applies to Dolby and DTS signals.
+- **Dialogue enhancer:** off, low, medium or high.
+- **Centre level offset,** a temporary trim.
+- **Subwoofer level offset,** a temporary trim.
+- **Volume:**
   - a fixed level, or an offset from the current level;
   - a cap ("never louder than");
   - or "leave".
 
+Each of these is to be verified on the X2700H before it's offered (see *Receiver facts*). The receiver's `control` flag also tells us when a setting can't change in the current mode, and the editor greys those out.
+
+**Only on Kodi's input:** presets apply only when the receiver is on Kodi's input (`GAME`, "Kodi - yblod", picked in settings from the receiver's renamed inputs). Nothing changes while another source is playing.
+
 **Rules** pick a preset when playback starts. Each rule matches on any of:
 - **content:** movie, episode, music video, live TV, music, other;
-- **audio format** (`VideoPlayer.AudioCodec` / `MusicPlayer.Codec`): `truehd`, `eac3`, `dtshd_ma`, `dtshd_hra`, `dca`, `ac3`, `aac`, `flac`, `pcm`, …;
-- **Atmos or DTS:X:** where Kodi tells us, through codec labels and stream details;
-- **channels** (`VideoPlayer.AudioChannels`): stereo or multichannel;
+- **audio format:** what the receiver reports it's decoding (`GetAudioInfo`: Dolby Atmos, TrueHD, DTS:X, DTS-HD, Dolby Digital, PCM, …), falling back to Kodi's `VideoPlayer.AudioCodec`;
+- **channels:** stereo or multichannel;
 - **time of day:** a night window.
 
-The first matching rule wins. The rules form a short ordered list edited in the UI, and they ship with defaults:
+The first matching rule wins. Rules are a short ordered list edited in the UI.
 
-| Rule | Default preset |
+**Defaults are conservative.** The addon ships with no rules on, and two suggested presets you can turn on:
+
+| Preset | Settings |
 | --- | --- |
-| Night window (off by default) | **Night**: Dynamic Volume medium, compression on, dialogue enhancer medium, volume cap |
-| Music | **Music**: Pure Direct or Stereo, Dynamic EQ off |
-| Atmos / TrueHD / DTS-HD, movies | **Cinema**: Dolby Surround / DTS Neural:X upmix off (Direct), Dynamic EQ on, reference offset 0 |
-| Episodes and live TV | **TV**: Dolby Surround, dialogue enhancer low, centre +1.5 dB |
-| Anything else | none (leave the receiver alone) |
+| **Night** (time window) | Dynamic Volume medium, compression high, dialogue enhancer medium, volume cap |
+| **Dialogue** (episodes, live TV) | Dialogue enhancer low |
 
 **Restore:**
-- **Before applying:** capture exactly the fields the preset will change, read over HTTP.
-- **On stop:** after a short settle, so the next playlist item doesn't thrash, put those fields back. The exception is anything the user changed during playback, detected by comparing with what we set, which is left as the user chose.
+- **Before applying:** capture exactly the fields the preset will change.
+- **On stop:** after a short settle, so the next playlist item doesn't thrash, put them back. The exception is anything the user changed during playback, detected by comparing with what we set, which is left as the user chose.
 
-**One-shot overrides:** "Play with receiver preset…" in the video context menu arms one preset for the next playback, like `service.webostv`'s "Play with picture preset…".
+**One-shot overrides:** "Play with receiver preset…" in the video context menu arms one preset for the next playback.
 
 **Debounce:** quick stop/start or seeking doesn't reapply. The same preset for the next item in a playlist is a no-op.
+
+**What the skin shows:** the receiver's own report of the format and sound mode (`Denon.Signal`, `Denon.SoundMode`), for example *Dolby Atmos · Dolby Atmos*, so you can see what the calibrated receiver is doing.
 
 ## Volume
 
@@ -192,7 +223,7 @@ Volume control outside Kodi, with the bridge talking to the receiver itself, is 
 | Power | `power`, `power_on`, `power_off` |
 | Volume | `volume_up`, `volume_down`, `volume` (set dB), `mute` |
 | Input | `input` |
-| Sound mode | `sound_mode` (set, or `next`) |
+| Sound mode | `sound_mode` (set, or `next`): only on demand, never from presets |
 | Presets | `preset` (apply now), `arm_preset` (next playback), `rules_enabled` |
 | Raw | `command` (raw control-port command) |
 | Dialogs | `ui` (status, presets, sound mode picker) |
@@ -210,6 +241,7 @@ Entry points:
 | `Denon.Input` | Current input |
 | `Denon.Volume` (dB), `Denon.VolumePercent`, `Denon.Mute` | Volume and mute |
 | `Denon.SoundMode` | Current sound mode |
+| `Denon.Signal` | Incoming audio format, as the receiver reports it |
 | `Denon.Preset` | The preset applied for this playback, empty when none |
 | `Denon.DynamicEQ`, `Denon.DynamicVolume`, `Denon.Dialogue` | Surround settings, for the skin page |
 
@@ -265,7 +297,5 @@ Presets and rules live in `addon_data/service.denonavr/presets.json`, not in `se
 
 ## Open questions
 
-1. Does Kodi expose Atmos or DTS:X reliably enough to match on, for TrueHD+Atmos versus plain TrueHD? If not, the Atmos rule matches TrueHD and E-AC-3 multichannel, and the receiver's own decoding decides.
-2. Which input does Kodi use on the receiver? Should a preset's "input" field exist, so playback can switch the receiver to Kodi's input?
-3. Do presets apply only when the receiver is on Kodi's input? This is safer: a game console on another input shouldn't get movie settings.
-4. Should the default presets be conservative (only sound mode plus Dynamic EQ) until you tune them?
+1. Which listening settings do you want presets to touch at all? The list above is the maximum, and each one is restored after playback.
+2. Should the manual `sound_mode` action exist, for example a "next sound mode" button? It would change the receiver's remembered mode, just as its own remote does. It could be left out entirely.
