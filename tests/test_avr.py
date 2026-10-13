@@ -144,3 +144,45 @@ def test_osd_menu_shows_the_format_and_changes_volume(fake, kodi, monkeypatch):
     assert shown[0][:4] == ["#32114: Dolby Digital", "#32115: Dolby Surround", "#32112: Kodi - yblod",
                             "#32113: 49 (-31.0 dB)"]
     assert shown[1][3] == "#32113: 50 (-30.0 dB)" and fake.mute
+
+
+async def test_volume_buttons_chain_and_respect_the_cap(fake, kodi, monkeypatch):
+    from resources.lib import service
+
+    monkeypatch.setattr(service, "POLL_IDLE", 60.0)
+    published = []
+    settings = Settings(host="127.0.0.1", volume_step=1.0, max_volume=-28.0)
+    follower = service.Follower("127.0.0.1", published.append, fake.http_port, 9, settings=lambda: settings)
+    await follower.read()
+    for _ in range(5):              # a held button: presses faster than the receiver
+        follower.volume(1)
+    await _until(lambda: follower._volume_task.done())
+    assert fake.volume == -28.0     # -31 + 5, capped at -28
+    assert len([c for c in fake.commands if c.startswith("1+-")]) <= 3   # not one request per press
+    assert {"VolumeShow": "true"} in published
+    assert [p for p in published if "Volume" in p][-1]["Volume"] == "-28.0"
+    follower.volume(-2)
+    await _until(lambda: follower._volume_task.done())
+    assert fake.volume == -30.0     # builds on the level just set
+    await follower.toggle_mute()
+    assert fake.mute
+    await follower.close()
+
+
+def test_discovery_keeps_only_receivers(fake):
+    from resources.lib import discovery
+
+    found = discovery.receivers(["127.0.0.1", "127.0.0.2"], port=fake.http_port)
+    assert [f.label for f in found] == ["AVR-X2700H (127.0.0.1)"]
+    assert discovery._location_host(b"HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.29:60006/x.xml\r\n\r\n") \
+        == "192.168.1.29"
+
+
+def test_find_receiver_saves_the_only_one(kodi, monkeypatch):
+    import xbmcaddon
+
+    from resources.lib import discovery, script
+
+    monkeypatch.setattr(discovery, "receivers", lambda: [discovery.Found("192.168.1.29", "AVR-X2700H")])
+    script.find_receiver()
+    assert xbmcaddon.Addon("service.denonavr").getSetting("host") == "192.168.1.29"

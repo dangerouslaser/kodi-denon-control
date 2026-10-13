@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+import xbmcaddon
 import xbmcgui
 
 from . import actions
@@ -12,11 +13,20 @@ from . import settings as settings_mod
 from .avr import Avr, AvrError, display_volume, is_silent
 from .lang import tr
 
+# Maximum volume choices, dB (0 dB is reference level, 80 on the display).
+MAX_VOLUME_CHOICES = (-40.0, -35.0, -30.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0, 5.0)
+
 
 def main(argv: list[str]) -> None:
     settings = settings_mod.load()
     log.set_debug(settings.debug)
     name, args = (argv[1] if len(argv) > 1 else "status"), argv[2:]
+    if name == "find_receiver":
+        find_receiver()
+        return
+    if name == "setting":
+        change_setting(settings, args[0] if args else "")
+        return
     if not settings.host:
         xbmcgui.Dialog().notification(tr(32100), tr(32101), xbmcgui.NOTIFICATION_WARNING)
         return
@@ -91,3 +101,44 @@ def osd_menu(settings, avr: Avr) -> None:
         log.info(actions.run(settings, avr, *action) or "")
         actions.notify_service()
         time.sleep(0.3)  # let the receiver take it before reading back
+
+
+def find_receiver() -> None:
+    """Search the network, pick a receiver, save it (the service follows)."""
+    from . import discovery  # noqa: PLC0415
+
+    dialog = xbmcgui.DialogProgress()
+    dialog.create(tr(32100), tr(32130))
+    try:
+        found = discovery.receivers()
+    finally:
+        dialog.close()
+    if not found:
+        xbmcgui.Dialog().ok(tr(32100), tr(32131))
+        return
+    index = 0 if len(found) == 1 else xbmcgui.Dialog().select(tr(32132), [f.label for f in found])
+    if index < 0:
+        return
+    xbmcaddon.Addon("service.denonavr").setSetting("host", found[index].host)
+    log.info(f"receiver set: {found[index].label}")
+    xbmcgui.Dialog().notification(tr(32100), found[index].label, xbmcgui.NOTIFICATION_INFO)
+
+
+def change_setting(settings, key: str) -> None:
+    """Skin page rows: step through or enter a setting."""
+    addon = xbmcaddon.Addon("service.denonavr")
+    if key == "volume_step":
+        index = settings_mod.VOLUME_STEPS.index(settings.volume_step) \
+            if settings.volume_step in settings_mod.VOLUME_STEPS else 1
+        addon.setSetting("volume_step", str((index + 1) % len(settings_mod.VOLUME_STEPS)))
+    elif key == "max_volume":
+        caps = MAX_VOLUME_CHOICES
+        labels = [f"{cap:g} dB ({display_volume(cap):g})" for cap in caps]
+        current = caps.index(settings.max_volume) if settings.max_volume in caps else -1
+        index = xbmcgui.Dialog().select(tr(32005), labels, preselect=current)
+        if index >= 0:
+            addon.setSetting("max_volume", f"{caps[index]:g}")
+    elif key == "host":
+        value = xbmcgui.Dialog().input(tr(32001), settings.host)
+        if value.strip():
+            addon.setSetting("host", value.strip())

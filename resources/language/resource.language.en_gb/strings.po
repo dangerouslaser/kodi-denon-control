@@ -121,3 +121,15 @@ msgstr ""
 msgctxt "#32124"
 msgid "The receiver is in standby. Turn it on?"
 msgstr ""
+
+msgctxt "#32130"
+msgid "Looking for receivers on the network…"
+msgstr ""
+
+msgctxt "#32131"
+msgid "No Denon receiver answered. Check it's on the same network, or enter its address."
+msgstr ""
+
+msgctxt "#32132"
+msgid "Choose your receiver"
+msgstr ""

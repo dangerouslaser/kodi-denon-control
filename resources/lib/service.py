@@ -23,6 +23,7 @@ import contextlib
 import threading
 
 import xbmc
+import xbmcaddon
 
 from . import kodilog as log
 from . import settings as settings_mod
@@ -42,13 +43,30 @@ BURST = (1.0, 3.0, 6.0, 10.0)
 EVENT_SETTLE = 0.2
 EVENTS = {"player_volume_changed", "player_state_changed", "sources_changed",
           "groups_changed", "players_changed"}
+# The skin's receiver volume bar (Denon.VolumeShow) stays up this long after a
+# volume or mute change, from anywhere.
+VOLUME_SHOW = 2.5
+# A volume button press within this long of the last builds on the level we
+# set, not on what was last read (the receiver may not have caught up).
+VOLUME_CHAIN = 1.5
+# Commands other add-ons send: JSONRPC.NotifyAll with sender service.denonavr
+# and one of these as the message (service.webostv's Remote Bridge sends the
+# TV remote's volume buttons this way).
+COMMANDS = {"volume_up", "volume_down", "mute"}
 
 
 class Follower:
     """The receiver as the skin sees it (loop thread)."""
 
-    def __init__(self, host: str, publish, http_port: int = AVR_PORT, heos_port: int = HEOS_PORT) -> None:
+    def __init__(self, host: str, publish, http_port: int = AVR_PORT, heos_port: int = HEOS_PORT,
+                 settings=lambda: settings_mod.Settings()) -> None:
         self.avr = Avr(host, http_port)
+        self._settings = settings
+        self._steps = 0  # volume presses not sent yet (+ up)
+        self._volume_task: asyncio.Task | None = None
+        self._target: tuple[float, float] | None = None  # level we set (dB), when
+        self._show: asyncio.TimerHandle | None = None
+        self._name = ""
         self._publish = publish
         self._lock = asyncio.Lock()
         self._model = ""
@@ -66,7 +84,7 @@ class Follower:
         self._poll = asyncio.ensure_future(self._polling())
 
     async def close(self) -> None:
-        for handle in [*self._timers, self._settle]:
+        for handle in [*self._timers, self._settle, self._show]:
             if handle is not None:
                 handle.cancel()
         if self._poll is not None:
@@ -85,6 +103,64 @@ class Follower:
             handle.cancel()
         self._timers = [loop.call_later(delay, self.refresh) for delay in BURST]
         self.refresh()
+
+    # -- volume buttons --
+
+    def volume(self, steps: int) -> None:
+        """Volume up (> 0) or down by `steps` presses; presses that come
+        while one is being sent go out together."""
+        self._steps += steps
+        if self._volume_task is None or self._volume_task.done():
+            self._volume_task = asyncio.ensure_future(self._send_volume())
+
+    async def _send_volume(self) -> None:
+        loop = asyncio.get_running_loop()
+        while self._steps:
+            steps, self._steps = self._steps, 0
+            settings = self._settings()
+            async with self._lock:
+                try:
+                    if self._target is not None and loop.time() - self._target[1] < VOLUME_CHAIN:
+                        base = self._target[0]
+                    else:
+                        base = (await asyncio.to_thread(self.avr.status)).volume
+                    if base is None:
+                        return
+                    db = min(settings.max_volume, base + steps * settings.volume_step)
+                    db = await asyncio.to_thread(self.avr.set_volume, db)
+                except AvrError as err:
+                    log.warning(f"volume: {err}")
+                    return
+                self._target = (db, loop.time())
+                if self.status is not None:
+                    self.status.volume = db
+                    self._publish(properties(True, self._model, self.status, self._name))
+                self._show_volume()
+        self._schedule_refresh(1.0)
+
+    async def toggle_mute(self) -> None:
+        async with self._lock:
+            try:
+                on = not (await asyncio.to_thread(self.avr.status)).mute
+                await asyncio.to_thread(self.avr.mute, on)
+            except AvrError as err:
+                log.warning(f"mute: {err}")
+                return
+            if self.status is not None:
+                self.status.mute = on
+                self._publish(properties(True, self._model, self.status, self._name))
+            self._show_volume()
+        self._schedule_refresh(1.0)
+
+    def _show_volume(self) -> None:
+        loop = asyncio.get_running_loop()
+        if self._show is not None:
+            self._show.cancel()
+        self._publish({"VolumeShow": "true"})
+        self._show = loop.call_later(VOLUME_SHOW, lambda: self._publish({"VolumeShow": ""}))
+
+    def _schedule_refresh(self, delay: float) -> None:
+        self._timers.append(asyncio.get_running_loop().call_later(delay, self.refresh))
 
     def _on_heos(self, event: str, fields: dict[str, str]) -> None:
         if event not in EVENTS:
@@ -117,6 +193,10 @@ class Follower:
             if not self.connected:
                 log.info(f"receiver {self._model or '?'} at {self.avr.base}")
             previous = self.status
+            if previous is not None and previous.power and status.power and \
+                    (previous.volume, previous.mute) != (status.volume, status.mute):
+                self._show_volume()  # changed elsewhere: a remote, Home Assistant
+            self._name = name
             changed = previous is None or (status.signal, status.sound) != (previous.signal, previous.sound)
             if changed and (status.signal or status.sound):
                 log.info(f"receiver: {status.signal or '-'} as {status.sound or '-'}")
@@ -145,8 +225,17 @@ class _Monitor(xbmc.Monitor):
         self._service = service
 
     def onNotification(self, sender: str, method: str, data: str) -> None:  # noqa: N802
-        if sender == "service.denonavr" and method.endswith(REFRESH):
+        if sender != "service.denonavr":
+            return
+        command = method.rsplit(".", 1)[-1]
+        if command == REFRESH:
             self._service.on_loop(lambda f: f.refresh())
+        elif command == "volume_up":
+            self._service.on_loop(lambda f: f.volume(1))
+        elif command == "volume_down":
+            self._service.on_loop(lambda f: f.volume(-1))
+        elif command == "mute":
+            self._service.on_loop(lambda f: asyncio.ensure_future(f.toggle_mute()))
 
     def onSettingsChanged(self) -> None:  # noqa: N802
         self._service.reload()
@@ -196,11 +285,23 @@ class DenonService:
 
     async def _start(self) -> None:
         if not self.settings.host:
-            log.info("no receiver host set (Settings > Receiver)")
             self._publish(properties(False, "", None, ""))
+            await self._find_one()
             return
-        self.follower = Follower(self.settings.host, self._publish)
+        self.follower = Follower(self.settings.host, self._publish, settings=lambda: self.settings)
         self.follower.start()
+
+    async def _find_one(self) -> None:
+        """No receiver set: if exactly one answers on the network, use it
+        (saving the setting restarts us with it). Otherwise wait for Find receiver."""
+        from . import discovery  # noqa: PLC0415
+
+        found = await asyncio.to_thread(discovery.receivers)
+        if len(found) == 1 and not self.closing:
+            log.info(f"found {found[0].label}; using it")
+            xbmcaddon.Addon("service.denonavr").setSetting("host", found[0].host)
+        else:
+            log.info(f"no receiver set, {len(found)} found: use Find receiver")
 
     def _publish(self, values: dict[str, str]) -> None:
         if not self.closing:

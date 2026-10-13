@@ -7,13 +7,13 @@ import xbmcgui
 from .avr import Status, display_volume, is_silent
 
 HOME = 10000
-PROPS = ("Connected", "Model", "Power", "Input", "InputName", "Volume", "VolumeDisplay", "Mute",
-         "Signal", "SoundMode", "Format")
+PROPS = ("Connected", "Model", "Power", "Input", "InputName", "Volume", "VolumeDisplay", "VolumePercent", "Mute",
+         "Signal", "SoundMode", "Format", "VolumeShow")
 
 
 def properties(connected: bool, model: str, status: Status | None, input_name: str) -> dict[str, str]:
     """The Denon.* values for this status (empty strings clear a property)."""
-    values = dict.fromkeys(PROPS, "")
+    values = dict.fromkeys((p for p in PROPS if p != "VolumeShow"), "")
     values["Connected"] = "true" if connected else "false"
     values["Model"] = model
     if not connected or status is None:
@@ -26,6 +26,8 @@ def properties(connected: bool, model: str, status: Status | None, input_name: s
     if status.volume is not None:
         values["Volume"] = f"{status.volume:.1f}"
         values["VolumeDisplay"] = f"{display_volume(status.volume):g}"
+        # 0..100 of the receiver's 0..98 scale, for the skin's volume ring.
+        values["VolumePercent"] = str(max(0, min(100, round(display_volume(status.volume) / 98 * 100))))
     values["Mute"] = "true" if status.mute else "false"
     if not is_silent(status.signal):
         values["Signal"] = status.signal

@@ -121,6 +121,23 @@ class Dialog:
         contextmenus.append([str(i) for i in items])
         return select_answers.pop(0) if select_answers else -1
 
+    def yesno(self, heading: str, message: str, *_a: Any, **_k: Any) -> bool:
+        return False
+
     def ok(self, heading: str, message: str) -> bool:
         textviewers.append((heading, message))
         return True
+
+
+class DialogProgress:
+    def create(self, heading: str, message: str = "") -> None:
+        pass
+
+    def update(self, percent: int, message: str = "") -> None:
+        pass
+
+    def iscanceled(self) -> bool:
+        return False
+
+    def close(self) -> None:
+        pass
