@@ -246,7 +246,7 @@ Entry points:
 | `Denon.Preset` | The preset applied for this playback, empty when none |
 | `Denon.DynamicEQ`, `Denon.DynamicVolume`, `Denon.Dialogue` | Surround settings, for the skin page |
 
-**Skin (Estuary LG):**
+**Skin (Estuary YBLOD):**
 - When the setup's audio receiver is Denon (`$EXP[setup_denon]`, added in 4.1.0+lg.15), there's a *Denon* page like the LG TV page. It shows:
   - status: input, volume and sound mode;
   - quick controls;
@@ -293,7 +293,7 @@ Presets and rules live in `addon_data/service.denonavr/presets.json`, not in `se
 | --- | --- |
 | **0.1** | Connection over HTTP and HEOS; state and skin properties; power, volume, mute, input and sound mode actions; status dialog; settings; deploy to Ollie |
 | **0.2** | Presets and rules with defaults, restore, one-shot override, preset editor dialog |
-| **0.3** | Skin *Denon* page and receiver volume bar (Estuary LG); Remote Bridge volume routing in `service.webostv` |
+| **0.3** | Skin *Denon* page and receiver volume bar (Estuary YBLOD); Remote Bridge volume routing in `service.webostv` |
 | Later | Optional control port; Zone 2; HEOS now-playing for music; Sonos sibling addon |
 
 ## Open questions

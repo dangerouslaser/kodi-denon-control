@@ -10,7 +10,7 @@ receiver's single control-port connection is left alone unless you turn it on.
 
 Status: early development. The design is in [spec.md](spec.md).
 
-Pairs with the Estuary LG skin (`skin.estuary.lg`): *Skin settings → General →
+Pairs with the Estuary YBLOD skin (`skin.estuary.yblod`): *Skin settings → General →
 Audio receiver: Denon*.
 
 ## Development
