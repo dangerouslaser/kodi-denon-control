@@ -8,7 +8,7 @@ Oct 12, 2026 · @dangerouslaser · status: draft for review
 
 Goals:
 
-- **Presets per media type.** When playback starts, apply the receiver settings that fit it: sound mode, Audyssey, dialogue, levels, dynamic range, volume. When it stops, put back what was there before.
+- **Presets per media type.** When playback starts, apply the listening settings that fit it: dynamic volume and range, dialogue, temporary level trims, volume. The receiver's calibrated sound modes are never changed. When it stops, put back what was there before.
 - **Reliable volume, no HDMI-CEC.** Kodi, the skin and the LG Remote Bridge can drive volume and mute directly.
 - **Live state for the skin.** Power, input, volume, mute and sound mode as `Window(Home).Property(Denon.*)`.
 - **Plays well with others.** Home Assistant and several universal remotes already control this receiver, so the addon must never depend on holding a connection they need.
@@ -135,8 +135,8 @@ Shared code is *copied*, not imported, so the two addons ship and update indepen
 `Receiver` (in `receiver.py`) is the only code that talks to the AVR. Everything else calls its methods or reads `ReceiverState`.
 
 `ReceiverState` contains:
-- **The basics:** power, input, volume (dB, and the receiver's 0–98 scale), mute and sound mode.
-- **The surround fields** that presets set: Dynamic EQ, Dynamic Volume, MultEQ, reference level offset, dynamic range compression, dialogue enhancer, centre and subwoofer level, LFE, Cinema EQ and Neural:X.
+- **The basics:** power, input, volume (dB, and the receiver's 0–98 scale), mute, sound mode and incoming signal (read only).
+- **The listening fields** that presets set: Dynamic EQ, reference level offset, Dynamic Volume, dynamic range compression, dialogue enhancer, centre and subwoofer trims.
 - **Stamps:** `available`, plus `updated` per field, because HTTP fields can be up to one poll old.
 
 Commands:
@@ -144,10 +144,11 @@ Commands:
 - **Raw commands:** `command(raw)` sends any control-port command, the equivalent of Home Assistant's `denonavr.get_command`.
 
 `apply()` sends the commands in the order the receiver needs:
-1. sound mode first, since some settings only exist in some modes;
-2. then the surround settings;
-3. then the levels;
-4. then volume last.
+1. the listening settings first;
+2. then the level trims;
+3. then volume last.
+
+Settings the receiver flags as not changeable in its current mode are skipped.
 
 After applying, it reads back and reports anything the receiver didn't take.
 
