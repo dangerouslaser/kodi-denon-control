@@ -8,8 +8,8 @@
     <provides>executable</provides>
   </extension>
   <extension point="xbmc.addon.metadata">
-    <summary lang="en_GB">Control a Denon AV receiver from Kodi, with sound presets per media type</summary>
-    <description lang="en_GB">Volume, mute, power, inputs and sound modes for Denon AV receivers on the LAN, and receiver presets chosen by what's playing (sound mode, Audyssey, dialogue, levels, dynamic range), restored when playback stops. Works alongside Home Assistant and other controllers: commands go over the receiver's HTTP interface and live updates come from HEOS. Publishes receiver state as skin properties (Window(Home).Property(Denon.*)).</description>
+    <summary lang="en_GB">Volume, mute and status of a Denon AV receiver in Kodi</summary>
+    <description lang="en_GB">Finds Denon AV receivers on the LAN and follows one: power, input, volume and mute, and the audio format coming in and how the receiver plays it. Volume and mute from Kodi, or from an LG TV's Magic Remote through LG webOS TV Control's Remote Bridge, with a volume step and a maximum volume. The receiver's calibrated sound modes are never changed. Works alongside Home Assistant and other controllers: commands go over the receiver's HTTP interface and live updates come from HEOS. Publishes the receiver's state for skins (Window(Home).Property(Denon.*)); Estuary YBLOD has a page and an OSD button for it.</description>
     <platform>all</platform>
     <license>Apache-2.0</license>
     <source>https://github.com/dangerouslaser/kodi-denon-control</source>
