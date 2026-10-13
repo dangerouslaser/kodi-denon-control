@@ -29,3 +29,75 @@ msgstr ""
 msgctxt "#32052"
 msgid "Log every command and reply to kodi.log."
 msgstr ""
+
+msgctxt "#32003"
+msgid "Volume"
+msgstr ""
+
+msgctxt "#32004"
+msgid "Volume step"
+msgstr ""
+
+msgctxt "#32005"
+msgid "Maximum volume (dB)"
+msgstr ""
+
+msgctxt "#32053"
+msgid "How much one volume up or down press changes the receiver's volume."
+msgstr ""
+
+msgctxt "#32054"
+msgid "Nothing in Kodi turns the receiver up past this, a safety cap. 0 dB is reference level (80 on the receiver's display)."
+msgstr ""
+
+msgctxt "#32100"
+msgid "Denon receiver"
+msgstr ""
+
+msgctxt "#32101"
+msgid "Set the receiver's address in the add-on settings."
+msgstr ""
+
+msgctxt "#32102"
+msgid "The receiver didn't respond."
+msgstr ""
+
+msgctxt "#32110"
+msgid "Model"
+msgstr ""
+
+msgctxt "#32111"
+msgid "Power"
+msgstr ""
+
+msgctxt "#32112"
+msgid "Input"
+msgstr ""
+
+msgctxt "#32113"
+msgid "Volume"
+msgstr ""
+
+msgctxt "#32114"
+msgid "Incoming audio"
+msgstr ""
+
+msgctxt "#32115"
+msgid "Playing as"
+msgstr ""
+
+msgctxt "#32120"
+msgid "On"
+msgstr ""
+
+msgctxt "#32121"
+msgid "Standby"
+msgstr ""
+
+msgctxt "#32122"
+msgid "muted"
+msgstr ""
+
+msgctxt "#32123"
+msgid "No signal"
+msgstr ""

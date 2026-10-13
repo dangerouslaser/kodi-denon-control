@@ -9,6 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests" / "fakes"))
+sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT))
 
 import xbmc  # noqa: E402

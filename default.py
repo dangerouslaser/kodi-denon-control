@@ -1,8 +1,15 @@
-"""RunScript entry point: actions and dialogs (from 0.1)."""
+"""RunScript entry point: RunScript(service.denonavr,<action>[,<arg>])
+
+    volume_up, volume_down     one step (Settings > Volume), never above the cap
+    volume,<dB>                e.g. volume,-35
+    mute[,on|off|toggle]
+    power[,on|off|toggle]
+    status                     a dialog with what the receiver is doing (default)
+"""
 
 import sys
 
-from resources.lib import kodilog as log
+from resources.lib.script import main
 
 if __name__ == "__main__":
-    log.info(f"RunScript {sys.argv[1:]}: no actions yet")
+    main(sys.argv)

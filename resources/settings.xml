@@ -20,5 +20,33 @@
         </setting>
       </group>
     </category>
+    <category id="volume" label="32003" help="">
+      <group id="1">
+        <setting id="volume_step" type="integer" label="32004" help="32053">
+          <level>0</level>
+          <default>1</default>
+          <constraints>
+            <options>
+              <option label="0.5 dB">0</option>
+              <option label="1 dB">1</option>
+              <option label="2 dB">2</option>
+            </options>
+          </constraints>
+          <control type="spinner" format="string"/>
+        </setting>
+        <setting id="max_volume" type="number" label="32005" help="32054">
+          <level>0</level>
+          <default>-10</default>
+          <constraints>
+            <minimum>-60</minimum>
+            <step>1</step>
+            <maximum>15</maximum>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>false</popup>
+          </control>
+        </setting>
+      </group>
+    </category>
   </section>
 </settings>
