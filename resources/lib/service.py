@@ -32,7 +32,7 @@ from .avr import PORT as AVR_PORT
 from .avr import Avr, AvrError, Status
 from .heos import PORT as HEOS_PORT
 from .heos import HeosEvents
-from .state import Publisher, properties
+from .state import Publisher, properties, settings_properties
 
 # Kodi kills a service that hasn't stopped this long after it was asked to.
 SHUTDOWN_BUDGET = 3.0
@@ -255,6 +255,7 @@ class DenonService:
         self._thread = threading.Thread(target=self._loop_main, name="denonavr-loop", daemon=True)
         self._thread.start()
         log.set_debug(self.settings.debug)
+        self._publish(settings_properties(self.settings))
         self._submit(self._start())
         log.info("service started")
         monitor = _Monitor(self)
@@ -317,6 +318,7 @@ class DenonService:
         log.set_debug(new.debug)
         changed = new.host != self.settings.host
         self.settings = new
+        self._publish(settings_properties(new))
         if changed and self.loop is not None:
             self._submit(self._restart())
 

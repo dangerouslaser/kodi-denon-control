@@ -41,6 +41,13 @@ def properties(connected: bool, model: str, status: Status | None, input_name: s
     return values
 
 
+def settings_properties(settings) -> dict[str, str]:
+    """Denon.Host and Denon.MaxVolume, for the skin's settings page: a skin
+    can't show an add-on's string setting itself ($INFO splits at the comma
+    in Addon.SettingStr(id,setting))."""
+    return {"Host": settings.host, "MaxVolume": f"{settings.max_volume:g}"}
+
+
 class Publisher:
     """Writes only what changed. Not used during shutdown.
 
